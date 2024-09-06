@@ -1,0 +1,207 @@
+*>****************************************************************
+*> Authors: Aditya Hirpara, Meet Maheta & Patel Meet
+*> Date: 25/07/2024
+*> Purpose: Project 3
+*> Tectonics: cobc
+*>****************************************************************
+IDENTIFICATION DIVISION.
+       PROGRAM-ID. StockPortfolioManager.
+
+ENVIRONMENT DIVISION.
+INPUT-OUTPUT SECTION.
+FILE-CONTROL.
+    *> Select the input stock file
+    SELECT STOCK-FILE-IN ASSIGN TO "STOCKS.txt"
+        ORGANIZATION IS LINE SEQUENTIAL.
+    *> Select the indexed investment file
+    SELECT INVESTMENT-FILE ASSIGN TO "INVESTMENTFILE.dat"
+        ORGANIZATION IS INDEXED
+        ACCESS MODE IS DYNAMIC
+        RECORD KEY IS INVESTMENT-STOCK-SYMBOL
+        FILE STATUS IS FILE-STATUS.
+
+DATA DIVISION.
+FILE SECTION.
+FD STOCK-FILE-IN.
+    *> Define the structure of the input stock file
+    01 STOCK-RECORD.
+        05 STOCK-SYMBOL-IN       PIC X(7).
+        05 STOCK-NAME-IN         PIC X(25).
+        05 STOCK-CLOSING-PRICE-IN PIC 9(4)V99.
+
+FD INVESTMENT-FILE.
+    *> Define the structure of the indexed investment file
+    01 INVESTMENT-RECORD.
+        05 INVESTMENT-STOCK-SYMBOL PIC X(7).
+        05 INVESTMENT-TOTAL-SHARES PIC 9(5).
+        05 INVESTMENT-AVG-COST-PER-SHARE PIC 9(4)V99.
+
+WORKING-STORAGE SECTION.
+01 WS-STOCK-TABLE.
+    *> Define an array to store stock information
+    05 WS-STOCK-ENTRIES OCCURS 20 TIMES INDEXED BY WS-INDEX.
+        10 WS-STOCK-SYMBOL     PIC X(7).
+        10 WS-STOCK-NAME       PIC X(25).
+        10 WS-STOCK-CLOSING-PRICE PIC 9(4)V99.
+
+01 WS-CLOSING-PRICE-FOUND    PIC X VALUE "N".
+    88 CLOSING-PRICE-FOUND    VALUE "Y".
+    88 CLOSING-PRICE-NOT-FOUND VALUE "N".
+
+01 USER-INPUT.
+    *> Variables to store user input
+    05 UI-STOCK-SYMBOL       PIC X(7).
+    05 UI-SHARES             PIC 9(5).
+
+01 WS-CLOSING-PRICE         PIC 9(4)V99 VALUE ZEROS.
+01 FILE-STATUS              PIC XX.
+01 WS-EOF-FLAG              PIC X VALUE "N".
+    88 EOF-FLAG-SET          VALUE "Y".
+    88 EOF-FLAG-NOT-SET      VALUE "N".
+
+SCREEN SECTION.
+01 INPUT-SCREEN.
+    05 BLANK SCREEN.
+    05 LINE 1 COLUMN 10 VALUE "*********************************************".
+    05 LINE 2 COLUMN 10 VALUE "*           Stock Portfolio Manager         *".
+    05 LINE 3 COLUMN 10 VALUE "*********************************************".
+    05 LINE 5 COLUMN 10 VALUE "Enter Stock Symbol (or EXIT to quit): ".
+    05 LINE 5 COLUMN 50 PIC X(7) TO UI-STOCK-SYMBOL.
+    05 LINE 7 COLUMN 10 VALUE "Enter Number of Shares to Buy: ".
+    05 LINE 7 COLUMN 50 PIC 9(5) TO UI-SHARES.
+    05 LINE 9 COLUMN 10 VALUE "*********************************************".
+
+01 OUTPUT-SCREEN.
+    05 BLANK SCREEN.
+    05 LINE 1 COLUMN 10 VALUE "*********************************************".
+    05 LINE 2 COLUMN 10 VALUE "*           Stock Portfolio Manager         *".
+    05 LINE 3 COLUMN 10 VALUE "*********************************************".
+    05 LINE 5 COLUMN 10 VALUE "Output: ".
+    05 LINE 6 COLUMN 10 VALUE "Stock Symbol: ".
+    05 LINE 6 COLUMN 50 PIC X(7) FROM UI-STOCK-SYMBOL.
+    05 LINE 7 COLUMN 10 VALUE "Shares: ".
+    05 LINE 7 COLUMN 50 PIC 9(5) FROM UI-SHARES.
+    05 LINE 9 COLUMN 10 VALUE "*********************************************".
+
+PROCEDURE DIVISION.
+000-MAIN.
+    *> Display the program header
+    DISPLAY "******************************".
+    DISPLAY "* Stock Portfolio Manager    *".
+    DISPLAY "******************************".
+    *> Open the files
+    DISPLAY "Opening files...".
+    OPEN INPUT STOCK-FILE-IN.
+    OPEN I-O INVESTMENT-FILE.
+    DISPLAY "Files opened. Loading stock table...".
+    *> Load the stock table from the stock file
+    PERFORM LOAD-STOCK-TABLE.
+    DISPLAY "Stock table loaded. Entering interactive input phase...".
+   
+    *> Enter the interactive input phase
+    PERFORM INTERACTIVE-INPUT.
+   
+    *> Close the files
+    DISPLAY "Closing files...".
+    PERFORM CLOSE-FILES.
+    DISPLAY "Files closed.".
+   
+    DISPLAY "Program ending.".
+    *> Display the investment file
+    PERFORM DISPLAY-INVESTMENT-FILE.
+    STOP RUN.
+
+LOAD-STOCK-TABLE.
+    *> Load stock data into the table
+    PERFORM VARYING WS-INDEX FROM 1 BY 1 UNTIL WS-INDEX > 20 OR EOF-FLAG-SET
+        READ STOCK-FILE-IN INTO STOCK-RECORD AT END
+            SET EOF-FLAG-SET TO TRUE
+            DISPLAY "End of stock file reached."
+        NOT AT END
+            IF STOCK-CLOSING-PRICE-IN IS NUMERIC
+                MOVE STOCK-SYMBOL-IN TO WS-STOCK-SYMBOL(WS-INDEX)
+                MOVE STOCK-CLOSING-PRICE-IN TO WS-STOCK-CLOSING-PRICE(WS-INDEX)
+                DISPLAY "Loaded: " STOCK-SYMBOL-IN " Price: " STOCK-CLOSING-PRICE-IN
+            ELSE
+                DISPLAY "Non-numeric data encountered: " STOCK-SYMBOL-IN " " STOCK-CLOSING-PRICE-IN
+            END-IF
+        END-READ
+    END-PERFORM.
+
+INTERACTIVE-INPUT.
+    *> Interactive input phase for user transactions
+    PERFORM WITH TEST BEFORE UNTIL UI-STOCK-SYMBOL = "EXIT    "
+        DISPLAY INPUT-SCREEN
+        ACCEPT INPUT-SCREEN
+        IF UI-STOCK-SYMBOL NOT = "EXIT    "
+            PERFORM PROCESS-BUY-TRANSACTION
+            DISPLAY OUTPUT-SCREEN
+            ACCEPT OUTPUT-SCREEN
+        END-IF
+    END-PERFORM.
+
+PROCESS-BUY-TRANSACTION.
+    *> Process the buy transaction for the input stock symbol
+    SET CLOSING-PRICE-NOT-FOUND TO TRUE
+    *> Search for the stock in the table to get the closing price
+    PERFORM VARYING WS-INDEX FROM 1 BY 1 UNTIL WS-INDEX > 20 OR CLOSING-PRICE-FOUND
+        IF WS-STOCK-SYMBOL(WS-INDEX) = UI-STOCK-SYMBOL THEN
+            MOVE WS-STOCK-CLOSING-PRICE(WS-INDEX) TO WS-CLOSING-PRICE
+            SET CLOSING-PRICE-FOUND TO TRUE
+        END-IF
+    END-PERFORM.
+    IF CLOSING-PRICE-FOUND
+        *> If the stock is found, proceed with updating the investment file
+        MOVE UI-STOCK-SYMBOL TO INVESTMENT-STOCK-SYMBOL
+        READ INVESTMENT-FILE KEY IS INVESTMENT-STOCK-SYMBOL
+            INVALID KEY
+                *> Add a new stock if it does not exist
+                MOVE UI-STOCK-SYMBOL TO INVESTMENT-STOCK-SYMBOL
+                MOVE UI-SHARES TO INVESTMENT-TOTAL-SHARES
+                MOVE WS-CLOSING-PRICE TO INVESTMENT-AVG-COST-PER-SHARE
+                WRITE INVESTMENT-RECORD
+                DISPLAY "New Stock Added: " UI-STOCK-SYMBOL
+                DISPLAY "Shares: " UI-SHARES
+                DISPLAY "Average Cost: " WS-CLOSING-PRICE
+            NOT INVALID KEY
+                *> Update the existing stock record
+                DISPLAY "Updating Existing Stock: " UI-STOCK-SYMBOL
+                DISPLAY "Existing Shares: " INVESTMENT-TOTAL-SHARES
+                DISPLAY "Existing Average Cost: " INVESTMENT-AVG-COST-PER-SHARE
+                COMPUTE INVESTMENT-AVG-COST-PER-SHARE =
+                    ((INVESTMENT-AVG-COST-PER-SHARE * INVESTMENT-TOTAL-SHARES) + (UI-SHARES * WS-CLOSING-PRICE))
+                    / (INVESTMENT-TOTAL-SHARES + UI-SHARES)
+                ADD UI-SHARES TO INVESTMENT-TOTAL-SHARES
+                REWRITE INVESTMENT-RECORD
+                DISPLAY "Updated Shares: " INVESTMENT-TOTAL-SHARES
+                DISPLAY "Updated Average Cost: " INVESTMENT-AVG-COST-PER-SHARE
+        END-READ
+    ELSE
+        *> Display an error if the stock symbol is not found
+        DISPLAY "Closing price not found for stock: " UI-STOCK-SYMBOL
+    END-IF.
+
+CLOSE-FILES.
+    *> Close all files
+    CLOSE STOCK-FILE-IN.
+    CLOSE INVESTMENT-FILE.
+    DISPLAY "Files closed.".
+
+DISPLAY-INVESTMENT-FILE.
+    *> Display the contents of the investment file
+    DISPLAY "Reading investment file..."
+    OPEN INPUT INVESTMENT-FILE.
+    PERFORM UNTIL FILE-STATUS = "10"
+        READ INVESTMENT-FILE NEXT RECORD
+            AT END
+                MOVE "10" TO FILE-STATUS
+            NOT AT END
+                DISPLAY "Symbol: " INVESTMENT-STOCK-SYMBOL
+                DISPLAY "Total Shares: " INVESTMENT-TOTAL-SHARES
+                DISPLAY "Avg Cost/Share: " INVESTMENT-AVG-COST-PER-SHARE
+        END-READ
+    END-PERFORM.
+    CLOSE INVESTMENT-FILE.
+ 
+
+END PROGRAM StockPortfolioManager.

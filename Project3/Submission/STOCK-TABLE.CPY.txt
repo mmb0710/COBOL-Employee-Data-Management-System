@@ -1,0 +1,9 @@
+01  WS-STOCK-TABLE.
+    *> Define an array to store stock entries, allowing up to 20 stocks
+    05 WS-STOCK-ENTRY OCCURS 20 TIMES.
+        10 WS-STOCK-SYMBOL    PIC X(7).
+            *> Stock symbol (e.g., 'AAPL')
+        10 WS-STOCK-NAME      PIC X(25).
+            *> Stock name (e.g., 'Apple Inc.')
+        10 WS-CLOSING-PRICE   PIC 9(4)V99.
+            *> Stock closing price (e.g., 145.32)
